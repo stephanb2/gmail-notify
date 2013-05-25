@@ -1,0 +1,11 @@
+# Compiled python files
+*.pyc
+
+# gedit backup files
+*~
+
+# Folders to ignore
+ignore/
+img/
+lib/
+
