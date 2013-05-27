@@ -1,23 +1,44 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Uploaded by juan_grande 2005/02/24 18:38 UTC
+# Modified Stephan Bourgeois <stephanb2@hotmail.com> 2013/01/18
+__author__ = "Juan Grande, Stephan Bourgeois"
+__copyright__ = "Copyright 2005 Juan Grande, 2013 Stephan Bourgeois"
+__license__ = "GNU General Public License version 2.0 (GPLv2)"
+__version__ = "1.6.2b"
+"""
+	Gmail Notifier is a Linux/Windows alternative for the notifier program 
+	released by Google, it is written in Python and provides an attractive 
+	and simple way to check for new mail messages.
+"""
+
 import pygtk
 pygtk.require('2.0')
 import gtk
 import time
 import os
-import pytrayicon
+from egg.trayicon import TrayIcon
 import sys
+#sys.path.insert (0, "/usr/lib/gmail-notify/")
+#sys.path.insert (0, "~/bin/gmail-notify/")
 import warnings
 import ConfigParser
-import xmllangs
+import re			#regular expressions
+import argparse
+
+import gmailatom
 import GmailConfig
 import GmailPopupMenu
-import gmailatom
+import xmllangs
 
-BKG_PATH=sys.path[0]+"/background.jpg"
-ICON_PATH=sys.path[0]+"/icon.png"
-ICON2_PATH=sys.path[0]+"/icon2.png"
+
+BKG_PATH=sys.path[0]+"/img/background.jpg"
+ICON_PATH=sys.path[0]+"/img/icon.png"
+ICON2_PATH=sys.path[0]+"/img/icon2.png"
+#BKG_PATH="/usr/share/apps/gmail-notify/background.jpg"
+#ICON_PATH="/usr/share/apps/gmail-notify/icon.png"
+#ICON2_PATH="/usr/share/apps/gmail-notify/icon2.png"
+POPUP_WIDTH=280
 
 def removetags(text):
 	raw=text.split("<b>")
@@ -44,19 +65,34 @@ def shortenstring(text,characters):
 class GmailNotify:
 
 	configWindow = None
-        options = None
+	options = None
 
 	def __init__(self):
 		self.init=0
-		print "Gmail Notifier v1.6.1b ("+time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())+")"
+		print "Gmail Notifier "+__version__+" ("+time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())+")"
 		print "----------"
-        	# Configuration window
-	        self.configWindow = GmailConfig.GmailConfigWindow( )
-        	# Reference to global options
-	        self.options = self.configWindow.options
-                # Check if there is a user and password, if not, load config window
-                while ( self.options["gmailusername"] == None or self.options["gmailpassword"] == None ):
-                        self.configWindow.show()
+
+		# get profile name from command line argument
+		parser = argparse.ArgumentParser()
+		parser.add_argument("-p", "--profile",
+			help="add profile name to config file. Allows to run multiple instances and check multiple accounts.")
+		args = parser.parse_args()
+		if args.profile==None:
+			profileFile = "notifier.conf"
+		else:
+			profileFile = "notifier-" + args.profile + ".conf"
+		print profileFile
+
+		# Configuration window
+		self.configWindow = GmailConfig.GmailConfigWindow( profileFile )
+		# Reference to global options
+		self.options = self.configWindow.options
+		# Check if there is a user and password, if not, load config window
+		if self.configWindow.no_username_or_password():
+			self.configWindow.show()
+			# If there's still not a username or password, just exit.
+			if self.configWindow.no_username_or_password():
+				sys.exit(0)
 		# Load selected language
 		self.lang = self.configWindow.get_lang()
 		print "selected language: "+self.lang.get_name()
@@ -82,15 +118,15 @@ class GmailNotify:
 		self.popuptimer=0
 		self.waittimer=0
 		# Create the tray icon object
-		self.tray = pytrayicon.TrayIcon(self.lang.get_string(21));
+		self.tray = TrayIcon(self.lang.get_string(21));
 		self.eventbox = gtk.EventBox()
 		self.tray.add(self.eventbox)
 		self.eventbox.connect("button_press_event", self.tray_icon_clicked)
 		# Tray icon drag&drop options
 		self.eventbox.drag_dest_set(
-		    gtk.DEST_DEFAULT_ALL,
-		    [('_NETSCAPE_URL', 0, 0),('text/uri-list ', 0, 1),('x-url/http', 0, 2)],
-		    gtk.gdk.ACTION_COPY | gtk.gdk.ACTION_MOVE)
+			gtk.DEST_DEFAULT_ALL,
+			[('_NETSCAPE_URL', 0, 0),('text/uri-list ', 0, 1),('x-url/http', 0, 2)],
+			gtk.gdk.ACTION_COPY | gtk.gdk.ACTION_MOVE)
 		# Create the tooltip for the tray icon
 		self._tooltip = gtk.Tooltips()
 		# Set the image for the tray icon
@@ -109,15 +145,17 @@ class GmailNotify:
 		self.fixed.show()
 		self.fixed.set_size_request(0,0)
 		# Set popup's background image
-		self.image=gtk.Image()
-		self.image.set_from_file( BKG_PATH )
-		self.image.show()
-		self.fixed.put(self.image,0,0)	
+		#self.image=gtk.Image()
+		#self.image.set_from_file( BKG_PATH )
+		#self.image.show()
+		#self.fixed.put(self.image,0,0)
+		#-----self.window.set_border_width(4)
+		self.window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse('#ddffff'))
 		# Set popup's label
 		self.label=gtk.Label()
 		self.label.set_line_wrap(1)
-		self.label.set_size_request(170,140)
-		self.default_label = "<span size='large' ><i><u>"+self.lang.get_string(21)+"</u></i></span>\n\n\n"+self.lang.get_string(20)
+		self.label.set_size_request(POPUP_WIDTH - 10,140)
+		self.default_label = "<span><b>" + self.lang.get_string(21) + "</b></span>\n" + self.lang.get_string(20)
 		self.label.set_markup( self.default_label)
 		# Show popup
 		self.label.show()
@@ -126,15 +164,15 @@ class GmailNotify:
 		self.event_box.set_visible_window(0)
 		self.event_box.show()
 		self.event_box.add(self.label)
-		self.event_box.set_size_request(180,125)
+		self.event_box.set_size_request(POPUP_WIDTH,125)
 		self.event_box.set_events(gtk.gdk.BUTTON_PRESS_MASK)
 		self.event_box.connect("button_press_event", self.event_box_clicked)
 		# Setup popup's event box
-		self.fixed.put(self.event_box,6,25)
+		self.fixed.put(self.event_box,5,-25)
 		self.event_box.realize()
 		self.event_box.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.HAND1))
 		# Resize and move popup's event box
-		self.window.resize(180,1)	
+		self.window.resize(POPUP_WIDTH,1)	
 		self.width, self.height = self.window.get_size()
 		self.height+=self.options['voffset']
 		self.width+=self.options['hoffset']
@@ -148,7 +186,9 @@ class GmailNotify:
 			# Check mail for first time
 			self.mail_check()
 
-		self.maintimer=gtk.timeout_add(self.options['checkinterval'],self.mail_check)
+		# Convert "checkinterval" seconds to miliseconds
+		self.maintimer=gtk.timeout_add(self.options['checkinterval']*1000,self.mail_check)
+
 
 	def connect(self):
 		# If connecting, cancel connection
@@ -162,7 +202,7 @@ class GmailNotify:
 			gtk.main_iteration( gtk.TRUE)
 		# Attemp connection
 		try:
-			self.connection=gmailatom.GmailAtom(self.options['gmailusername'],self.options['gmailpassword'])
+			self.connection=gmailatom.GmailAtom(self.options['gmailusername'],self.options['gmailpassword'],self.options['proxy'])
 			self.connection.refreshInfo()
 			print "connection successful... continuing"
 			self._tooltip.set_tip(self.tray,self.lang.get_string(14))
@@ -171,11 +211,14 @@ class GmailNotify:
 		except:
 			print "login failed, will retry"
 			self._tooltip.set_tip(self.tray,self.lang.get_string(15))
-			self.default_label = "<span size='large' ><u><i>"+self.lang.get_string(15)+"</i></u></span>\n\n"+self.lang.get_string(16)
+			#self.default_label = "<span size='large' ><u><i>"+self.lang.get_string(15)+"</i></u></span>\n\n"+self.lang.get_string(16)
+			self.default_label = "<span size='medium'><b>" + self.lang.get_string(15) + \
+					"</b></span>\n <span size='small'>" + self.lang.get_string(16)+"</span>"
 			self.label.set_markup(self.default_label)
 			self.show_popup()
 			self.dont_connect=0
 			return 0
+
 
 	def mail_check(self, event=None):
 		# If checking, cancel mail check
@@ -202,16 +245,24 @@ class GmailNotify:
 		# Update tray icon
 		self.eventbox.remove(self.imageicon)
 		self.imageicon = gtk.Image()
-
+		
+		# create label and tooltip content (SB)
+		#FIXME: produce new label if there are unread messages (attrs[0]>0)
 		if attrs[1]>0:
 			print str(attrs[1])+" new messages"
 			sender = attrs[2]
 			subject= attrs[3]
 			snippet= attrs[4]
+			#label header
+			self.default_label = "<b>"+self.options['gmailusername']+" ("+ str(attrs[0]) +")\n</b>"
+			#label message
+			self.default_label += "<span size='small'><b>" + \
+					sender[0:24]+" - " + \
+					shortenstring(subject,20)+"</b>"
 			if len(snippet)>0:
-				self.default_label="<span size='large' ><u><i>"+self.lang.get_string(17)+sender[0:24]+"</i></u></span>\n"+shortenstring(subject,20)+"\n\n"+snippet+"..."
+				self.default_label += " - "+snippet+"...</span>"
 			else:
-				self.default_label="<span size='large' ><u><i>"+self.lang.get_string(17)+sender[0:24]+"</i></u></span>\n"+shortenstring(subject,20)+"\n\n"+snippet+"..."
+				self.default_label += "</span>"
 			self.show_popup()
 		if attrs[0]>0:
 			print str(attrs[0])+" unread messages"
@@ -221,11 +272,14 @@ class GmailNotify:
 			pixbuf = gtk.gdk.pixbuf_new_from_file( ICON2_PATH )
 		else:
 			print "no new messages"
-			self.default_label="<span size='large' ><i><u>"+self.lang.get_string(21)+"</u></i></span>\n\n\n"+self.lang.get_string(18)
+			#self.default_label="<b>"+self.lang.get_string(21)+"</b>\n"+self.lang.get_string(18)
+			self.default_label = "<b>"+self.options['gmailusername']+" ("+ str(attrs[0]) +")\n</b>"
+			self.default_label+=self.lang.get_string(18)
 			self._tooltip.set_tip(self.tray,self.lang.get_string(18))	
 			pixbuf = gtk.gdk.pixbuf_new_from_file( ICON_PATH )
 		
-		self.label.set_markup(self.default_label)
+		p = re.compile('&')
+		self.label.set_markup(p.sub('&amp;', self.default_label))
 		scaled_buf = pixbuf.scale_simple(24,24,gtk.gdk.INTERP_BILINEAR)
 		self.imageicon.set_from_pixbuf(scaled_buf)
 		self.eventbox.add(self.imageicon)
@@ -235,8 +289,9 @@ class GmailNotify:
 		self.mailcheck=0
 
 		return gtk.TRUE
+
 	
-	def has_new_messages( self):
+	def has_new_messages(self):
 		unreadmsgcount=0
 		# Get total messages in inbox
 		try:
@@ -257,16 +312,17 @@ class GmailNotify:
 			subject = self.connection.getMsgTitle(0)
 			snippet = self.connection.getMsgSummary(0)
 			if len(sender)>12: 
-				finalsnippet=shortenstring(snippet,20)
-			else:
 				finalsnippet=shortenstring(snippet,40)
+			else:
+				finalsnippet=shortenstring(snippet,60)
 		# Really new messages? Or just repeating...
 		newmsgcount=unreadmsgcount-self.unreadmsgcount
 		self.unreadmsgcount=unreadmsgcount
 		if unreadmsgcount>0:
 			return (unreadmsgcount, newmsgcount, sender, subject, finalsnippet)
 		else:
-			return (unreadmsgcount,0, sender, subject, finalsnippet)
+			return (unreadmsgcount, 0, sender, subject, finalsnippet)
+
 
 	def show_popup(self):
 		# If popup is up, destroy it
@@ -278,6 +334,7 @@ class GmailNotify:
 		self.window.show()	
 		return
 
+
 	def destroy_popup(self):
 		print "destroying popup"
 		if self.popuptimer>0:gtk.timeout_remove(self.popuptimer)
@@ -285,9 +342,10 @@ class GmailNotify:
 		self.senddown=0
 		self.hassettimer=0
 		self.window.hide()
-		self.window.resize(180,1)
+		self.window.resize(POPUP_WIDTH,1)
 		self.window.move(gtk.gdk.screen_width() - self.width, gtk.gdk.screen_height() - self.height)
 		return
+
 
 	def popup_proc(self):
 		# Set popup status flag
@@ -302,32 +360,34 @@ class GmailNotify:
 				# If popup is down
 				self.senddown=0
 				self.window.hide()
-				self.window.resize(180,1)
+				self.window.resize(POPUP_WIDTH,1)
 				self.window.move(gtk.gdk.screen_width() - self.width, gtk.gdk.screen_height() - self.height)
 				self.popup=0
 				return gtk.FALSE
 			else:
 				# Move it down
-				self.window.resize(180,sizey-2)	
+				self.window.resize(POPUP_WIDTH,sizey-2)	
 				self.window.move(gtk.gdk.screen_width() - self.width,positiony+2)
 		else:
 			if sizey<140:
 				# Move it up
-				self.window.resize(180,sizey+2)
+				self.window.resize(POPUP_WIDTH,sizey+2)
 				self.window.move(gtk.gdk.screen_width() - self.width,positiony-2)
 			else:
-				# If popup is up, run wait timer
+				# If popup is up, run wait timer. Convert seconds to miliseconds (SB)
 				sizex=currentsize[0]
 				self.popup=1
 				if self.hassettimer==0:
-					self.waittimer = gtk.timeout_add(self.options['popuptimespan'],self.wait)
+					self.waittimer = gtk.timeout_add(self.options['popuptimespan']*1000,self.wait)
 					self.hassettimer=1	
 		return gtk.TRUE
+
 
 	def wait(self):
 		self.senddown=1
 		self.hassettimer=0
 		return gtk.FALSE
+
 
 	def tray_icon_clicked(self,signal,event):
 		if event.button==3:
@@ -335,6 +395,7 @@ class GmailNotify:
 		else:
 			self.label.set_markup(self.default_label)
 			self.show_popup()
+
 
 	def event_box_clicked(self,signal,event):
 		if event.button==1:
@@ -346,13 +407,15 @@ class GmailNotify:
 		dialog.move( gtk.gdk.screen_width()/2-dialog.width/2, gtk.gdk.screen_height()/2-dialog.height/2)
 		ret = dialog.run()
 		if( ret==gtk.RESPONSE_YES):
-		    gtk.main_quit(0)
+			gtk.main_quit(0)
 		dialog.destroy()
+
 
 	def gotourl( self, wg=None):
 		print "----------"
-		print "launching browser "+self.options['browserpath']+" http://gmail.google.com"
-		os.system(self.options['browserpath']+" http://gmail.google.com &")	
+		print "launching browser "+self.options['browserpath']+" http://mail.google.com"
+		os.system(self.options['browserpath']+" http://mail.google.com &")	
+
 
 	def show_quota_info( self, event):
 		print "Not available"
@@ -371,6 +434,7 @@ class GmailNotify:
 		#self.label.set_markup("<span size='large' ><u><i>"+self.lang.get_string(6)+"</i></u></span>\n\n"+self.lang.get_string(24)%{'u':usage[0],'t':usage[1],'p':usage[2]})
 		#self.show_popup()
 
+
 	def update_config(self, event=None):
 		# Kill all timers
 		if self.popup==1:self.destroy_popup()
@@ -378,31 +442,34 @@ class GmailNotify:
 		# Run the configuration dialog
 		self.configWindow.show()
 
-		# Update timeout
-		self.maintimer = gtk.timeout_add(self.options["checkinterval"], self.mail_check )
+		# Update timeout. Convert seconds to miliseconds (SB)
+		self.maintimer = gtk.timeout_add(self.options["checkinterval"]*1000, self.mail_check )
 
 		# Update user/pass
-		self.connection=gmailatom.GmailAtom(self.options["gmailusername"],self.options["gmailpassword"])
+		self.connection=gmailatom.GmailAtom(self.options["gmailusername"],self.options["gmailpassword"],self.options['proxy'])
 		self.connect()
 		self.mail_check()
 
 		# Update popup location
-		self.window.resize(180,1)
+		self.window.resize(POPUP_WIDTH,1)
 		self.width, self.height = self.window.get_size()
 		self.height +=self.options["voffset"]
 		self.width +=self.options["hoffset"]
 		self.window.move(gtk.gdk.screen_width() - self.width, gtk.gdk.screen_height() - self.height)
 
 		# Update language
-                self.lang=self.configWindow.get_lang()	
+		self.lang=self.configWindow.get_lang()	
 
 		# Update popup menu
 		self.popup_menu = GmailPopupMenu.GmailPopupMenu(self)
 
 		return
 
+
 	def main(self):
 		gtk.main()
+
+
 
 if __name__ == "__main__":
 	warnings.filterwarnings( action="ignore", category=DeprecationWarning)

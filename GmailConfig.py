@@ -9,18 +9,21 @@ import gmailatom
 import xmllangs
 import sys
 
-LANGSXML_PATH=sys.path[0]+"/langs.xml"
-ICON_PATH=sys.path[0]+"/gmail-notify-icon.png"
+
+LANGSXML_PATH="/usr/share/apps/gmail-notify/langs.xml"
+ICON_PATH="/usr/share/apps/gmail-notify/gmail-notify-icon.png"
+CONFIG_FILE="notifier.conf"
 
 class GmailConfigWindow:
 
 	# Public variables
 	configElements = None 
+	# profileConf = "notifier-foo.conf"
 
 	# Declare global variables for configuration as dictionary
-	options = { "gmailusername":None, "gmailpassword":None, "browserpath":"firefox", "lang":"English",   
-				"voffset":0, "hoffset":0, "checkinterval":20000, 
-				"animationdelay":15, "popuptimespan":5000}
+	options = { "gmailusername":None, "gmailpassword":None, "browserpath":"www-browser", "proxy":None,
+				"lang":"English", "voffset":0, "hoffset":0, "checkinterval":120, 
+				"animationdelay":15, "popuptimespan":5}
 					
 	config = ConfigParser.RawConfigParser()
 	loadedConfig = ""
@@ -28,8 +31,9 @@ class GmailConfigWindow:
 
 	langs_parser=None
 	
-	def __init__( self):
-		# Read configuration
+	def __init__( self, profile):
+		self.profileConf = profile
+		# Read configuration	
 		self.readConfig()
 
 		self.window = gtk.Window( gtk.WINDOW_TOPLEVEL )
@@ -49,6 +53,7 @@ class GmailConfigWindow:
 						["gmailusername",2,None,None],
 						["gmailpassword",22,None,None],
 						["browserpath",3,None,None],
+						["proxy",36,None,None],
 						["voffset",28,None,None],
 						["hoffset",27,None,None],
 						["checkinterval",31,None,None],
@@ -57,7 +62,7 @@ class GmailConfigWindow:
 					]
 
 		# Create table and attach to window
-		table = gtk.Table( rows=11, columns=2, homogeneous=gtk.FALSE )
+		table = gtk.Table( rows=12, columns=2, homogeneous=gtk.FALSE )
 
 		self.window.add(table)
 
@@ -114,7 +119,7 @@ class GmailConfigWindow:
 			self.savePassword.set_active( gtk.FALSE )
 			
 		self.savePassword.show()
-		table.attach( alignment, 0, 2, 9, 10 )
+		table.attach( alignment, 0, 2, 10, 11 )
 		alignment.show()
 
 		# Add combobox to select language 
@@ -122,21 +127,21 @@ class GmailConfigWindow:
 		self.lbl_langs.set_alignment(0, 0.5)
 		self.cbo_langs=gtk.combo_box_new_text()
 		self.cbo_langs.connect( 'changed', self.update_labels)
-                for one_lang in self.langs:
-                        if one_lang==self.lang:
-                                self.cbo_langs.prepend_text( one_lang.get_name())
-                        else:
-                                self.cbo_langs.append_text( one_lang.get_name())
+		for one_lang in self.langs:
+			if one_lang==self.lang:
+				self.cbo_langs.prepend_text( one_lang.get_name())
+			else:
+				self.cbo_langs.append_text( one_lang.get_name())
 		self.cbo_langs.set_active(0)
 		# Attach combobox and label
-		table.attach( self.lbl_langs, 0, 1, 8, 9 )
+		table.attach( self.lbl_langs, 0, 1, 9, 10 )
 		self.lbl_langs.show()
-		table.attach( self.cbo_langs, 1, 2, 8, 9, ypadding=5 )
+		table.attach( self.cbo_langs, 1, 2, 9, 10, xpadding=5, ypadding=5 )
 		self.cbo_langs.show()
 		
 		# Add 'Close' button
 		button = gtk.Button( stock=gtk.STOCK_OK )
-		table.attach( button, 0, 2, 10, 11, ypadding=2 )
+		table.attach( button, 0, 2, 11, 12, xpadding=2, ypadding=2 )
 		button.connect( "clicked", self.onOkay )
 		button.show()
 
@@ -157,7 +162,7 @@ class GmailConfigWindow:
 		
 	def readConfig( self ):
 		self.config = ConfigParser.RawConfigParser()
-		readFiles = self.config.read( [os.path.expanduser( "~/.notifier.conf" ), sys.path[0]+"/notifier.conf", "/etc/notifier.conf"] )
+		readFiles = self.config.read( [os.path.expanduser( "~/." + self.profileConf ), sys.path[0]+"/" + CONFIG_FILE, "/etc/" + CONFIG_FILE] )
 
 		#check readFiles has len, if not the next if will fail so use my method
 		#to check if any of the configs exist and set self.loadedConfig appropriately
@@ -167,20 +172,20 @@ class GmailConfigWindow:
 			len( readFiles )
 		except(TypeError):
 			self.lenfail=1
-			if (self.checkfile("/etc/notifier.conf")):
-				self.loadedConfig="/etc/notifier.conf"
-			elif (self.checkfile(sys.path[0]+"/notifier.conf")):
-				self.loadedConfig=sys.path[0]+"/notifier.conf"
-			elif (self.checkfile(os.path.expanduser("~/.notifier.conf"))):
-				self.loadedConfig=os.path.expanduser("~/.notifier.conf")
+			if (self.checkfile("/etc/" + CONFIG_FILE)):
+				self.loadedConfig="/etc/" + CONFIG_FILE
+			elif (self.checkfile(sys.path[0]+"/" + CONFIG_FILE)):
+				self.loadedConfig=sys.path[0]+"/" + CONFIG_FILE
+			elif (self.checkfile(os.path.expanduser("~/." + self.profileConf))):
+				self.loadedConfig=os.path.expanduser("~/." + self.profileConf)
 			else:
-				self.loadedConfig = os.path.expanduser("~/.notifier.conf")
+				self.loadedConfig = os.path.expanduser("~/." + self.profileConf)
 				self.config.add_section("options")					
 
 		# Save the file it read configuration options from
 		if self.lenfail==0:
 			if ( len( readFiles ) <= 0 ):
-				self.loadedConfig = os.path.expanduser( "~/.notifier.conf" )
+				self.loadedConfig = os.path.expanduser( "~/." + self.profileConf )
 				self.config.add_section( "options" )
 			else:
 				self.loadedConfig = readFiles[0]
@@ -198,7 +203,7 @@ class GmailConfigWindow:
 		self.langs = self.langs_parser.get_all_langs()
 		self.lang = self.langs_parser.find_lang( self.options["lang"])
 	
-		print "Configuration read (" + self.loadedConfig + ")"
+		print "Configuration read 1.6.2b (" + self.loadedConfig + ")"
 			
 	def getOptions( self ):
 		return self.options
@@ -222,7 +227,7 @@ class GmailConfigWindow:
 
 		# Before writing, check for bad values
 		try:
-			tempLogin = gmailatom.GmailAtom( self.options["gmailusername"], self.options["gmailpassword"] )
+			tempLogin = gmailatom.GmailAtom( self.options["gmailusername"], self.options["gmailpassword"], self.options["proxy"])
 			tempLogin.refreshInfo()
 		except:
 			print "Unexpected error:", sys.exc_info()[0]
@@ -237,7 +242,10 @@ class GmailConfigWindow:
 				self.config.remove_option( "options", "gmailusername" )
 				self.config.remove_option( "options", "gmailpassword" )
 
-			self.config.write( open( self.loadedConfig, 'w' ) )
+			fd = open( self.loadedConfig, 'w' )
+			os.chmod( self.loadedConfig, 0600)
+			self.config.write( fd )
+			fd.close()
 			gtk.main_quit()
 			self.hide()
 		else:
@@ -260,8 +268,12 @@ class GmailConfigWindow:
 	def get_lang( self ):
 		return self.lang
 			
+	def no_username_or_password( self ):
+		return ( self.options["gmailusername"] == None or self.options["gmailpassword"] == None )
+			
 	def main( self ):
 		gtk.main()
+		
 		
 if __name__ == "__main__":
 	config = GmailConfigWindow()

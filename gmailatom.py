@@ -21,9 +21,12 @@
 #	getMsgSummary(index)
 #	getMsgAuthorName(index)
 #	getMsgAuthorEmail(index)
+#	getMsgId(index)
 #
 # by Juan Grande
 # juan.grande@gmail.com
+#
+# Modified by Stephan Bourgeois <stephanb2@hotmail.com> 2013/05/24
 
 from xml.sax.handler import ContentHandler
 from xml import sax
@@ -35,6 +38,7 @@ class Mail:
 	summary=""
 	author_name=""
 	author_addr=""
+	mail_id=""
 
 # Sax XML Handler
 class MailHandler(ContentHandler):
@@ -45,6 +49,7 @@ class MailHandler(ContentHandler):
 	TAG_ENTRY = "entry"
 	TAG_TITLE = "title"
 	TAG_SUMMARY = "summary"
+	TAG_ID = "id"
 	TAG_AUTHOR = "author"
 	TAG_NAME = "name"
 	TAG_EMAIL = "email"
@@ -53,8 +58,10 @@ class MailHandler(ContentHandler):
 	PATH_FULLCOUNT = [ TAG_FEED, TAG_FULLCOUNT ]
 	PATH_TITLE = [ TAG_FEED, TAG_ENTRY, TAG_TITLE ]
 	PATH_SUMMARY = [ TAG_FEED, TAG_ENTRY, TAG_SUMMARY ]
+	PATH_ID = [ TAG_FEED, TAG_ENTRY, TAG_ID ]
 	PATH_AUTHOR_NAME = [ TAG_FEED, TAG_ENTRY, TAG_AUTHOR, TAG_NAME ]
 	PATH_AUTHOR_EMAIL = [ TAG_FEED, TAG_ENTRY, TAG_AUTHOR, TAG_EMAIL ]
+
 
 	def __init__(self):
 		self.startDocument()
@@ -93,6 +100,12 @@ class MailHandler(ContentHandler):
 			temp_mail=self.entries.pop()
 			temp_mail.summary=temp_mail.summary+content
 			self.entries.append(temp_mail)
+	
+		# Message id
+		if (self.actual==self.PATH_ID):
+			temp_mail=self.entries.pop()
+			temp_mail.mail_id=temp_mail.mail_id+content
+			self.entries.append(temp_mail)
 
 		# Message author name
 		if (self.actual==self.PATH_AUTHOR_NAME):
@@ -105,6 +118,7 @@ class MailHandler(ContentHandler):
 			temp_mail=self.entries.pop()
 			temp_mail.author_addr=temp_mail.author_addr+content
 			self.entries.append(temp_mail)
+			
 
 	def getUnreadMsgCount(self):
 		return int(self.mail_count)
@@ -116,12 +130,17 @@ class GmailAtom:
 	host = "https://mail.google.com"
 	url = host + "/mail/feed/atom"
 
-	def __init__(self, user, pswd):
+	def __init__(self, user, pswd, proxy=None):
 		self.m = MailHandler()
 		# initialize authorization handler
 		auth_handler = urllib2.HTTPBasicAuthHandler()
 		auth_handler.add_password( self.realm, self.host, user, pswd)
-		opener = urllib2.build_opener(auth_handler)
+		# manage proxy
+		if proxy:
+			proxy_handler = urllib2.ProxyHandler({'http': proxy})
+			opener = urllib2.build_opener(proxy_handler, auth_handler)
+		else:
+			opener = urllib2.build_opener(auth_handler)
 		urllib2.install_opener(opener)
 
 	def sendRequest(self):
@@ -145,3 +164,6 @@ class GmailAtom:
 
 	def getMsgAuthorEmail(self, index):
 		return self.m.entries[index].author_email
+		
+	def getMsgId(self, index):
+	    return self.m.entries[index].mail_id
