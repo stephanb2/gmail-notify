@@ -1,0 +1,47 @@
+h1. Gmail Notifier
+
+h2. Description
+
+p. Gmail Notifier is a notifier for Gnome type desktops on Linux. It displays a tray icon with the number of unread messages and pops up an alert when new mail is received to your Gmail account.
+
+p. The app is using the "Atom Gmail Inbox Feed.":https://developers.google.com/gmail/gmail_inbox_feed 
+
+h2. About this version
+
+p. This version is a fork of the Debianised package "gmail-notify (1.6.1.1-2)":http://packages.debian.org/wheezy/gmail-notify . The original app appears to be unmaintained since 2008.
+
+p. What's new:
+
+* Profiles. Users can now register multiple Gmail accounts. An individual tray icon will appear for each account.
+* New layout of the popup box. The new layout allows to preview more information from new emails.
+* Durations in the configuration dialog are now in seconds rather than miliseconds.
+
+p. To do:
+
+* Password hiding / obfuscation.
+* New message logic based on message Id rather than inbox counter.
+* Refactor to separate GUI from logic.
+* Installer and packages.
+
+h2. Credits
+
+p. This package was debianized by Joseph Smidt <jsmidt@byu.edu> in 2006. It was downloaded from http://gmail-notify.sourceforge.net/
+
+p. Copyright 2004,2005 John Winter <wintersoft@gmail.com>
+
+p. A big thanks to Juan Grande for his large amount of development work. Thank you also to Richard Viney and Japostoles for their very helpful code contributions and testing.
+
+h2. Dependencies
+
+* Python (python)
+* PyGTK	(python-gtk2)
+* Egg TrayIcon (python-eggtrayicon)
+* GTK
+
+h2. Instructions
+
+p. First, run the app from the console with @notifier.py@ for testing. To set multiple profiles, you can run multiple instances with @notifier.py -p <profile name>@. 
+
+p. If all goes well, add the command line with the full path to the app folder in the Session and Startup preferences of your desktop.
+
+

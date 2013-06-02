@@ -39,6 +39,7 @@ ICON2_PATH=sys.path[0]+"/img/icon2.png"
 #ICON_PATH="/usr/share/apps/gmail-notify/icon.png"
 #ICON2_PATH="/usr/share/apps/gmail-notify/icon2.png"
 POPUP_WIDTH=280
+POPUP_HEIGHT=140
 
 def removetags(text):
 	raw=text.split("<b>")
@@ -103,7 +104,7 @@ class GmailNotify:
 		self.window.set_decorated(0)
 		self.window.set_keep_above(1)
 		self.window.stick()
-		self.window.hide()	
+		self.window.hide()
 		# Define some flags
 		self.senddown=0
 		self.popup=0
@@ -154,7 +155,8 @@ class GmailNotify:
 		# Set popup's label
 		self.label=gtk.Label()
 		self.label.set_line_wrap(1)
-		self.label.set_size_request(POPUP_WIDTH - 10,140)
+		self.label.set_size_request(POPUP_WIDTH-20, POPUP_HEIGHT-20)
+		self.label.set_alignment(xalign=0, yalign=0) #(SB) align top left
 		self.default_label = "<span><b>" + self.lang.get_string(21) + "</b></span>\n" + self.lang.get_string(20)
 		self.label.set_markup( self.default_label)
 		# Show popup
@@ -164,11 +166,12 @@ class GmailNotify:
 		self.event_box.set_visible_window(0)
 		self.event_box.show()
 		self.event_box.add(self.label)
-		self.event_box.set_size_request(POPUP_WIDTH,125)
+		self.event_box.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
+		self.event_box.set_border_width(10)
 		self.event_box.set_events(gtk.gdk.BUTTON_PRESS_MASK)
 		self.event_box.connect("button_press_event", self.event_box_clicked)
 		# Setup popup's event box
-		self.fixed.put(self.event_box,5,-25)
+		self.fixed.add(self.event_box)
 		self.event_box.realize()
 		self.event_box.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.HAND1))
 		# Resize and move popup's event box
@@ -247,9 +250,8 @@ class GmailNotify:
 		self.imageicon = gtk.Image()
 		
 		# create label and tooltip content (SB)
-		#FIXME: produce new label if there are unread messages (attrs[0]>0)
-		if attrs[1]>0:
-			print str(attrs[1])+" new messages"
+		# produce new label if there are unread messages (attrs[0]>0)
+		if attrs[0]>0:		
 			sender = attrs[2]
 			subject= attrs[3]
 			snippet= attrs[4]
@@ -258,12 +260,16 @@ class GmailNotify:
 			#label message
 			self.default_label += "<span size='small'><b>" + \
 					sender[0:24]+" - " + \
-					shortenstring(subject,20)+"</b>"
+					shortenstring(subject,32)+"</b>"
 			if len(snippet)>0:
 				self.default_label += " - "+snippet+"...</span>"
 			else:
 				self.default_label += "</span>"
+		# display popup if there are new messages
+		if attrs[1]>0:
+			print str(attrs[1])+" new messages"
 			self.show_popup()
+		# update tooltip string
 		if attrs[0]>0:
 			print str(attrs[0])+" unread messages"
 			s = ' ' 
@@ -311,6 +317,7 @@ class GmailNotify:
 			sender = self.connection.getMsgAuthorName(0)
 			subject = self.connection.getMsgTitle(0)
 			snippet = self.connection.getMsgSummary(0)
+			#FIXME: maybe count total number of characters?
 			if len(sender)>12: 
 				finalsnippet=shortenstring(snippet,40)
 			else:
@@ -354,24 +361,25 @@ class GmailNotify:
 		currentsize=self.window.get_size()
 		currentposition=self.window.get_position()
 		positiony=currentposition[1]
+		sizex=currentsize[0]
 		sizey=currentsize[1]
 		if self.senddown==1:
 			if sizey<2:
 				# If popup is down
 				self.senddown=0
 				self.window.hide()
-				self.window.resize(POPUP_WIDTH,1)
+				self.window.resize(sizex, 1)
 				self.window.move(gtk.gdk.screen_width() - self.width, gtk.gdk.screen_height() - self.height)
 				self.popup=0
 				return gtk.FALSE
 			else:
 				# Move it down
-				self.window.resize(POPUP_WIDTH,sizey-2)	
+				self.window.resize(sizex, sizey-2)	
 				self.window.move(gtk.gdk.screen_width() - self.width,positiony+2)
 		else:
 			if sizey<140:
 				# Move it up
-				self.window.resize(POPUP_WIDTH,sizey+2)
+				self.window.resize(sizex, sizey+2)
 				self.window.move(gtk.gdk.screen_width() - self.width,positiony-2)
 			else:
 				# If popup is up, run wait timer. Convert seconds to miliseconds (SB)
