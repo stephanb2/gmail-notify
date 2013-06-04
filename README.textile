@@ -48,10 +48,16 @@ p. If all goes well, add the command line with the full path to the app folder i
 
 h2. Screenshots
 
+<<<<<<< HEAD
 p. Tray icons
 !doc/trayicon.png(Tray icon)!
 
 p. Popup box
 !doc/popup.png(Popup box)!
+=======
+p. Tray icons !doc/trayicon.png(Tray icon)!
+
+p. Popup box !doc/popup.png(Popup box)!
+>>>>>>> 2161c0c7f0bec5a4e012a78d4c7f72b79116f6e5
 
 
