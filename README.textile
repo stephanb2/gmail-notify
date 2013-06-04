@@ -52,6 +52,6 @@ p. Tray icons
 !doc/trayicon.png(Tray icon)!
 
 p. Popup box
-
+!doc/popup.png(Popup box)!
 
 
