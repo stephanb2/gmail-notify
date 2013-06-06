@@ -19,11 +19,10 @@ import time
 import os
 from egg.trayicon import TrayIcon
 import sys
-#sys.path.insert (0, "/usr/lib/gmail-notify/")
-#sys.path.insert (0, "~/bin/gmail-notify/")
 import warnings
 import ConfigParser
-import re			#regular expressions
+#import re			# regular expressions
+import cgi			# we use cgi.escape instead of regular expressions (SB)
 import argparse
 
 import gmailatom
@@ -32,6 +31,8 @@ import GmailPopupMenu
 import xmllangs
 
 
+#sys.path.insert (0, "/usr/lib/gmail-notify/")
+#sys.path.insert (0, "~/bin/gmail-notify/")
 BKG_PATH=sys.path[0]+"/img/background.jpg"
 ICON_PATH=sys.path[0]+"/img/icon.png"
 ICON2_PATH=sys.path[0]+"/img/icon2.png"
@@ -156,6 +157,7 @@ class GmailNotify:
 		self.label=gtk.Label()
 		self.label.set_line_wrap(1)
 		self.label.set_size_request(POPUP_WIDTH-20, POPUP_HEIGHT-20)
+		#self.label.set_size_request(POPUP_WIDTH-20, -1) #(SB) dynamic height
 		self.label.set_alignment(xalign=0, yalign=0) #(SB) align top left
 		self.default_label = "<span><b>" + self.lang.get_string(21) + "</b></span>\n" + self.lang.get_string(20)
 		self.label.set_markup( self.default_label)
@@ -166,8 +168,8 @@ class GmailNotify:
 		self.event_box.set_visible_window(0)
 		self.event_box.show()
 		self.event_box.add(self.label)
-		self.event_box.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
-		self.event_box.set_border_width(10)
+		#self.event_box.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
+		self.event_box.set_border_width(10) #(SB) set border around label
 		self.event_box.set_events(gtk.gdk.BUTTON_PRESS_MASK)
 		self.event_box.connect("button_press_event", self.event_box_clicked)
 		# Setup popup's event box
@@ -251,16 +253,17 @@ class GmailNotify:
 		
 		# create label and tooltip content (SB)
 		# produce new label if there are unread messages (attrs[0]>0)
+		# escape characters from message for HTML, including quotes.
 		if attrs[0]>0:		
 			sender = attrs[2]
-			subject= attrs[3]
-			snippet= attrs[4]
+			subject= cgi.escape(attrs[3], True)
+			snippet= cgi.escape(attrs[4], True)
 			#label header
 			self.default_label = "<b>"+self.options['gmailusername']+" ("+ str(attrs[0]) +")\n</b>"
 			#label message
 			self.default_label += "<span size='small'><b>" + \
 					sender[0:24]+" - " + \
-					shortenstring(subject,32)+"</b>"
+					shortenstring(subject,36)+"</b>"
 			if len(snippet)>0:
 				self.default_label += " - "+snippet+"...</span>"
 			else:
@@ -283,9 +286,12 @@ class GmailNotify:
 			self.default_label+=self.lang.get_string(18)
 			self._tooltip.set_tip(self.tray,self.lang.get_string(18))	
 			pixbuf = gtk.gdk.pixbuf_new_from_file( ICON_PATH )
-		
-		p = re.compile('&')
-		self.label.set_markup(p.sub('&amp;', self.default_label))
+			
+		# using regular expressions will not always work. (SB)
+		# more characters than "&" need to be escaped. use cgi.escape(string) instead
+		#p = re.compile('&')
+		#self.label.set_markup(p.sub('&amp;', self.default_label))
+		self.label.set_markup(self.default_label)
 		scaled_buf = pixbuf.scale_simple(24,24,gtk.gdk.INTERP_BILINEAR)
 		self.imageicon.set_from_pixbuf(scaled_buf)
 		self.eventbox.add(self.imageicon)
@@ -319,9 +325,9 @@ class GmailNotify:
 			snippet = self.connection.getMsgSummary(0)
 			#FIXME: maybe count total number of characters?
 			if len(sender)>12: 
-				finalsnippet=shortenstring(snippet,40)
+				finalsnippet=shortenstring(snippet,70)
 			else:
-				finalsnippet=shortenstring(snippet,60)
+				finalsnippet=shortenstring(snippet,80)
 		# Really new messages? Or just repeating...
 		newmsgcount=unreadmsgcount-self.unreadmsgcount
 		self.unreadmsgcount=unreadmsgcount
@@ -410,7 +416,7 @@ class GmailNotify:
 			self.gotourl()
 
 	def exit(self, event):
-		dialog = gtk.MessageDialog( None, gtk.DIALOG_MODAL, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO, self.lang.get_string(5))
+		dialog = gtk.MessageDialog(None, gtk.DIALOG_MODAL, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO, self.lang.get_string(5))
 		dialog.width, dialog.height = dialog.get_size()
 		dialog.move( gtk.gdk.screen_width()/2-dialog.width/2, gtk.gdk.screen_height()/2-dialog.height/2)
 		ret = dialog.run()

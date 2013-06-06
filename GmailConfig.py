@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import base64
 import pygtk
 pygtk.require('2.0')
 import os
 import gtk
+import sys
+import random
 import ConfigParser
+
 import gmailatom
 import xmllangs
-import sys
+
 
 
 LANGSXML_PATH=sys.path[0]+"/langs.xml"
@@ -20,7 +24,7 @@ class GmailConfigWindow:
 
 	# Public variables
 	configElements = None 
-	# profileConf = "notifier-foo.conf"
+	offlineMode = False  # True for offline testing
 
 	# Declare global variables for configuration as dictionary
 	options = { "gmailusername":None, "gmailpassword":None, "browserpath":"www-browser", "proxy":None,
@@ -33,8 +37,15 @@ class GmailConfigWindow:
 
 	langs_parser=None
 	
-	def __init__( self, profile):
+	# (SB) added constructor optional arguments 
+	def __init__( self, profile=CONFIG_FILE, offline=False):
+		"""
+		To run offline tests, call constructor with 2 arguments.
+		Example:
+		GmailConfigWindow(notifier-test.conf, True)
+		"""
 		self.profileConf = profile
+		self.offlineMode = offline
 		# Read configuration	
 		self.readConfig()
 
@@ -163,6 +174,9 @@ class GmailConfigWindow:
 			return None
 		
 	def readConfig( self ):
+		"""
+		Read config file and assign existing values to self.options dict
+		"""
 		self.config = ConfigParser.RawConfigParser()
 		readFiles = self.config.read( [os.path.expanduser( "~/." + self.profileConf ), sys.path[0]+"/" + CONFIG_FILE, "/etc/" + CONFIG_FILE] )
 
@@ -199,6 +213,10 @@ class GmailConfigWindow:
 					self.options[key] = self.config.getint( 'options', key )
 				else:
 					self.options[key] = self.config.get( 'options', key ).replace( '"', '' )
+					
+		#TODO: de-obfuscate password (SB)
+		if ( self.config.has_option('options', "gmailpassword") ):
+			self.options["gmailpassword"] = self.pass_dec(self.config.get('options',"gmailpassword"))
 
 		# Create langs and lang objects
 		self.langs_parser = xmllangs.LangsParser(LANGSXML_PATH)
@@ -206,16 +224,25 @@ class GmailConfigWindow:
 		self.lang = self.langs_parser.find_lang( self.options["lang"])
 	
 		print "Configuration read 1.6.2b (" + self.loadedConfig + ")"
+
 			
 	def getOptions( self ):
 		return self.options
+
 
 	def onDelete( self, widget, data=None ):
 		gtk.main_quit()
 		self.hide()
 		return gtk.TRUE
 	
+
 	def onOkay( self, widget, callback_data=None ):
+		"""
+		Callback function for OK button: 
+		* assign values to the config variable,
+		* check username && password options
+		* write config to file
+		"""
 		errorString = ""
 		
 		# Apply changes to options dictionary
@@ -228,17 +255,21 @@ class GmailConfigWindow:
 		self.options["lang"]=self.cbo_langs.get_model().get_value(iter, 0)	
 
 		# Before writing, check for bad values
-		try:
-			tempLogin = gmailatom.GmailAtom( self.options["gmailusername"], self.options["gmailpassword"], self.options["proxy"])
-			tempLogin.refreshInfo()
-		except:
-			print "Unexpected error:", sys.exc_info()[0]
-			errorString = errorString + "Login appears to be invalid\n"
+		if not self.offlineMode:
+			try:
+				tempLogin = gmailatom.GmailAtom( self.options["gmailusername"], self.options["gmailpassword"], self.options["proxy"])
+				tempLogin.refreshInfo()
+			except:
+				print "Unexpected error:", sys.exc_info()[0]
+				errorString = errorString + "Login appears to be invalid\n"
 
 		if ( len( errorString ) == 0 ):
 			# No errors, so write to config file
 			for key in self.options.keys():
 				self.config.set( "options", key, self.options[key] )
+			
+			# Obfuscate password in config file (SB)
+			self.config.set( "options", "gmailpassword" , self.pass_enc(self.options["gmailpassword"]))
 
 			if ( not self.savePassword.get_active() ):
 				self.config.remove_option( "options", "gmailusername" )
@@ -272,6 +303,28 @@ class GmailConfigWindow:
 			
 	def no_username_or_password( self ):
 		return ( self.options["gmailusername"] == None or self.options["gmailpassword"] == None )
+		
+	def pass_enc (self, string):
+		if (len(string)<32):
+			pad = "".join(chr(int(random.uniform(48,126))) for i in range(32-len(string)))
+		string = chr(len(string)) + string + pad
+		return base64.b64encode(string)
+		
+	def pass_dec(self, string):
+		try:
+			dec = base64.b64decode(string)
+			return dec[1:ord(dec[0])+1]
+		# we get TypeError : Incorrect padding when reading an old notifier.conf config file
+		# for backward compatibility, we return the plain text password string (SB)
+		except TypeError, ex:
+			errorString = "Update your Configuration:\n\nRight-click on tray icon > Configure...\nThen press [OK]"
+			print "\nWARNING: Update your configuration file. Right-click on tray icon > Configure...\n"
+			dialog = gtk.MessageDialog(None, buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_INFO)
+			dialog.set_position( gtk.WIN_POS_CENTER )
+			dialog.set_markup( errorString )
+			dialog.run();
+			dialog.destroy()
+		return string
 			
 	def main( self ):
 		gtk.main()

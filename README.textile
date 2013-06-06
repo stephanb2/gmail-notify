@@ -14,13 +14,15 @@ p. What's new:
 
 * Profiles. Users can now register multiple Gmail accounts. An individual tray icon will appear for each account.
 * New layout of the popup box. The new layout allows to preview more information from new emails.
+* Password obfuscation. This prevents casual users from reading the password in the config file.
 * Durations in the configuration dialog are now in seconds rather than miliseconds.
+* Bug fix: message encoding with cgi.escape rather than regular expressions.
 
 p. To do:
 
-* Password hiding / obfuscation.
 * New message logic based on message Id rather than inbox counter.
 * Show more than one message snippet.
+* Password encryption with Gnome Keyring.
 * Refactor to separate GUI from logic.
 * Installer and error messages to assist installation.
 
@@ -44,6 +46,8 @@ h2. Instructions
 p. First, run the app from the console with @notifier.py@ for testing. To set multiple profiles, you can run multiple instances with @notifier.py -p <profile name>@. 
 
 p. If all goes well, add the command line with the full path to the app folder in the Session and Startup preferences of your desktop.
+
+p. Password obfuscation is backward compatible with old notifier.conf config files. Users will be warned to update their Preferences / Configuration. Opening the Configuration dialog and clicking [OK] will update the file.
 
 
 h2. Screenshots
